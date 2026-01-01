@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #f8fafc; /* Slate-50 (Light Gray) */
+    --surface: #ffffff;    /* White */
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-background text-slate-900 antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Mobile Safe Area Fix */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
