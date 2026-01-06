@@ -1,8 +1,5 @@
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { LucideIcon } from "lucide-react";
-import { Icons } from "@/components/icons";
+import { LucideIcon, ArrowRight } from "lucide-react";
 
 interface GameModeCardProps {
   title: string;
@@ -10,25 +7,38 @@ interface GameModeCardProps {
   icon: LucideIcon;
   href: string;
   buttonText: string;
-  gradient: string; // css class for gradient
+  gradient: string; // e.g. "from-violet-600 to-fuchsia-600"
+  bgGradient: string; // e.g. "from-violet-50 to-fuchsia-50"
+  textColor: string; // e.g. "text-violet-600"
 }
 
-export function GameModeCard({ title, description, icon: Icon, href, buttonText, gradient }: GameModeCardProps) {
+export function GameModeCard({ 
+  title, 
+  description, 
+  icon: Icon, 
+  href, 
+  buttonText, 
+  gradient, 
+  bgGradient, 
+  textColor 
+}: GameModeCardProps) {
   return (
-    <Card className="overflow-hidden border-0 shadow-md group relative">
-      <div className={`absolute inset-0 opacity-10 ${gradient}`} />
-      <CardContent className="p-6 relative z-10 flex flex-col h-full">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${gradient} text-white`}>
-          <Icon className="w-6 h-6" />
+    <Link href={href} className="block group">
+      <div className={`bg-gradient-to-br ${bgGradient} hover:shadow-md hover:scale-[1.01] border border-white/50 rounded-2xl p-6 transition-all duration-300 cursor-pointer`}>
+        
+        <div className="flex justify-between items-start mb-4">
+          <div className={`w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm ${textColor}`}>
+            <Icon className="w-6 h-6" />
+          </div>
         </div>
-        <CardTitle className="text-xl mb-2">{title}</CardTitle>
-        <CardDescription className="mb-6 flex-1">{description}</CardDescription>
-        <Link href={href} className="w-full">
-          <Button className="w-full gap-2 group-hover:translate-x-1 transition-transform">
-            {buttonText} <Icons.arrowRight className="w-4 h-4" />
-          </Button>
-        </Link>
-      </CardContent>
-    </Card>
+
+        <h3 className="text-xl font-bold text-slate-900 mb-1">{title}</h3>
+        <p className="text-slate-600 text-sm mb-4">{description}</p>
+        
+        <div className={`w-full h-12 bg-gradient-to-r ${gradient} text-white rounded-xl flex items-center justify-center font-bold gap-2 shadow-lg opacity-90 group-hover:opacity-100 transition-all`}>
+          {buttonText} <ArrowRight size={18} />
+        </div>
+      </div>
+    </Link>
   );
 }

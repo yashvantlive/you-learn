@@ -1,21 +1,22 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getDatabase } from "firebase/database";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getDatabase } from "firebase/database"; // ✅ Import
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDRHEFRRjGIhTGyaBXK_rwLQAu-UnuN4pU",
-  authDomain: "class-10th-you-learn.firebaseapp.com",
-  databaseURL: "https://class-10th-you-learn-default-rtdb.firebaseio.com",
-  projectId: "class-10th-you-learn",
-  storageBucket: "class-10th-you-learn.firebasestorage.app",
-  messagingSenderId: "662845038910",
-  appId: "1:662845038910:web:54c6b5840c685dbbf7cc6f"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL, // ✅ Required for RTDB
 };
 
-// Singleton Pattern: अगर App पहले से है तो उसे ही यूज करें, नया न बनाएं
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = getDatabase(app);     // Realtime DB (Rooms के लिए)
-export const firestore = getFirestore(app); // Firestore (Questions के लिए)
+export const googleProvider = new GoogleAuthProvider();
+export const db = getFirestore(app);
+export const rtdb = getDatabase(app); // ✅ Export this

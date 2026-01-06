@@ -1,98 +1,73 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
-import { 
-  User as FirebaseUser, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signOut as firebaseSignOut,
-  onAuthStateChanged 
-} from "firebase/auth";
-import { ref, get, set } from "firebase/database";
-import { auth, db } from "@/lib/firebase";
-import { UserProfile } from "@/types";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { auth, googleProvider } from "./firebase"; 
+import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 
 interface AuthContextType {
-  user: UserProfile | null;
-  loading: boolean;
+  user: User | null;
+  isLoading: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: true,
+  isLoading: true,
   login: async () => {},
   logout: async () => {},
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        await handleUserProfile(firebaseUser);
-      } else {
-        setUser(null);
-        setLoading(false);
-      }
+    let mounted = true;
+
+    // 1. Firebase Listener
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!mounted) return;
+      
+      setUser(currentUser);
+      setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    // 2. SAFETY VALVE (Silent Fix)
+    // Increased to 15 seconds and removed console.warn to prevent annoying logs.
+    const safetyTimer = setTimeout(() => {
+      if (mounted && isLoading) {
+        // Silently allow the app to load if Firebase is stuck
+        setIsLoading(false); 
+      }
+    }, 15000); 
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
-  const handleUserProfile = async (authUser: FirebaseUser) => {
-    try {
-      const userRef = ref(db, `users/${authUser.uid}/profile`);
-      const snapshot = await get(userRef);
-
-      if (snapshot.exists()) {
-        setUser(snapshot.val() as UserProfile);
-      } else {
-        const newUser: UserProfile = {
-          uid: authUser.uid,
-          displayName: authUser.displayName || "Student",
-          email: authUser.email || "",
-          photoURL: authUser.photoURL || "",
-          level: 1,
-          xp: 0,
-          coins: 0,
-          rank: "Bronze",
-          class: 10,
-          board: "CBSE",
-          createdAt: Date.now(),
-          lastLoginAt: Date.now(),
-        };
-        await set(userRef, newUser);
-        setUser(newUser);
-      }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const login = async () => {
-    const provider = new GoogleAuthProvider();
     try {
-      setLoading(true); // Fix: UI responsiveness
-      await signInWithPopup(auth, provider);
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      console.error("Login failed:", error);
-      setLoading(false);
+      console.error("Login failed", error);
+      throw error;
     }
   };
 
   const logout = async () => {
-    await firebaseSignOut(auth);
-    setUser(null);
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

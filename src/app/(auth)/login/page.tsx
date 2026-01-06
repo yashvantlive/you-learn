@@ -1,101 +1,126 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useAuth } from "@/lib/auth-context";
-import { Icons } from "@/components/icons";
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider, rtdb } from "@/lib/firebase";
+import { ref, get } from "firebase/database";
+import { Loader2, Sparkles, ShieldCheck, FileText, Home } from "lucide-react";
+import Link from "next/link";
 
 export default function LoginPage() {
-  const { login, user, loading } = useAuth();
   const router = useRouter();
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    // अगर यूजर पहले से लॉग इन है, तो उसे सीधे डैशबोर्ड पर भेजें
-    if (user && !loading) {
-      setIsRedirecting(true); // UI को लॉक कर दें
-      router.push("/dashboard");
-    }
-  }, [user, loading, router]);
+  /*
+   * 🔒 ENGINEERING NOTE: COOP/COEP WARNING
+   * * If you see "Cross-Origin-Opener-Policy policy would block the window.close call" in console:
+   * * 1. STATUS: EXPECTED BEHAVIOR (Do not fix)
+   * 2. CAUSE:  The Google Auth popup runs on a cross-origin domain. When it completes and 
+   * attempts to self-close via window.close(), modern browser COOP isolation 
+   * flags this interaction because the opener (our app) enforces security policies.
+   * 3. IMPACT: NONE. The auth token is successfully passed before this warning triggers.
+   * The popup closes successfully despite the warning.
+   * 4. ACTION: No action required. Do not relax headers further (e.g., unsafe-none) 
+   * just to silence a harmless console log.
+   */
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError("");
 
-  const handleLogin = async () => {
     try {
-      await login();
-      // लॉगिन सफल होने पर useEffect अपने आप रिडायरेक्ट कर देगा
-    } catch (error) {
-      console.error("Login trigger failed", error);
+      // 1. Google Sign In
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // 2. Check Profile Status in Realtime DB
+      const profileRef = ref(rtdb, `users/${user.uid}/profile`);
+      const snapshot = await get(profileRef);
+
+      // 3. Intelligent Redirect
+      if (snapshot.exists() && snapshot.val().isOnboarded === true) {
+        // If profile exists and onboarded -> Dashboard
+        router.push("/dashboard");
+      } else {
+        // If new user or incomplete profile -> Onboarding
+        router.push("/onboarding");
+      }
+
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      setError("Failed to sign in. Please try again.");
+      setLoading(false); // Stop loading on error
     }
   };
 
-  // 1. Loading UI: जब तक चेक हो रहा है कि यूजर लॉग इन है या नहीं
-  if (loading || isRedirecting) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center space-y-4 bg-slate-50">
-        <div className="bg-violet-100 p-4 rounded-full animate-pulse">
-          <Icons.spinner className="w-8 h-8 text-violet-600 animate-spin" />
-        </div>
-        <p className="text-slate-500 font-medium">Checking authentication...</p>
-      </div>
-    );
-  }
-
-  // 2. Main Login Form
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-      <Card className="w-full max-w-md shadow-xl border-slate-200 animate-in fade-in zoom-in-95 duration-500">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto bg-violet-100 p-3 rounded-full w-16 h-16 flex items-center justify-center mb-2">
-            <Icons.user className="w-8 h-8 text-violet-600" />
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      
+      <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl space-y-8 animate-in slide-in-from-bottom-4 border border-slate-100">
+        
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-4 bg-violet-100 text-violet-600 rounded-2xl mb-2 shadow-inner">
+            <Sparkles size={28} />
           </div>
-          <CardTitle className="text-2xl font-bold text-slate-900">
-            Welcome Back
-          </CardTitle>
-          <CardDescription className="text-slate-500">
-            Sign in to save your progress and join battles
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <Button 
-            onClick={handleLogin} 
-            size="lg" 
-            className="w-full gap-3 relative overflow-hidden font-semibold text-base py-6 border-slate-200 hover:bg-slate-50 hover:text-slate-900" 
-            disabled={loading || isRedirecting}
-            variant="outline"
-          >
-            {/* Google Icon SVG */}
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
-            </svg>
-            Sign in with Google
-          </Button>
+          <h1 className="text-3xl font-black text-slate-900">Welcome Back!</h1>
+          <p className="text-slate-500 font-medium">Ready to conquer your exams?</p>
+        </div>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-slate-200" />
+        {/* Buttons Group */}
+        <div className="space-y-3">
+          {/* 1. Google Login Button */}
+          <button 
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-violet-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] shadow-sm"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="animate-spin" /> Checking profile...
+              </span>
+            ) : (
+              <>
+                <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" />
+                Continue with Google
+              </>
+            )}
+          </button>
+          
+          {/* 2. ✅ Back to Home Button (Inside Card) */}
+          <Link 
+            href="/" 
+            className="w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl hover:bg-slate-200 hover:text-slate-800 transition-all flex items-center justify-center gap-2"
+          >
+            <Home size={18} /> Back to Home
+          </Link>
+
+          {error && (
+            <div className="bg-red-50 text-red-500 text-sm font-bold p-3 rounded-xl text-center border border-red-100">
+              {error}
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-slate-400">Secure Authentication</span>
-            </div>
+          )}
+        </div>
+
+        {/* Footer & Legal Links */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+            Secure Login Powered by Google
+          </p>
+          
+          <div className="flex items-center justify-center gap-6 text-xs font-bold text-slate-500">
+            <Link href="/privacy" className="flex items-center gap-1.5 hover:text-violet-600 transition-colors">
+              <ShieldCheck size={14} /> Privacy Policy
+            </Link>
+            <div className="w-1 h-1 bg-slate-300 rounded-full" />
+            <Link href="/terms" className="flex items-center gap-1.5 hover:text-violet-600 transition-colors">
+              <FileText size={14} /> Terms of Service
+            </Link>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+      </div>
     </div>
   );
 }

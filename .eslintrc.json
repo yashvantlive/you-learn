@@ -1,0 +1,7 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    // अपनी मनपसंद rules यहाँ जोड़ें
+    "react/no-unescaped-entities": "off"
+  }
+}

@@ -1,160 +1,113 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ref, onValue } from "firebase/database";
-import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
-import { Icons } from "@/components/icons";
-import { StatCard } from "./_components/stat-card";
-import { GameModeCard } from "./_components/game-mode-card";
-import { UserStats, getLevelInfo } from "@/types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { db, rtdb } from "@/lib/firebase";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { ref, get } from "firebase/database";
+import { Loader2 } from "lucide-react";
 
-export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth();
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loadingStats, setLoadingStats] = useState(true);
+// ✅ Import Premium Components
+import WelcomeBanner from "./_components/WelcomeBanner";
+import LiveTicker from "./_components/LiveTicker";
+import ActionGrid from "./_components/ActionGrid";
+import StatsOverview from "../profile/_components/StatsOverview"; // Reusing profile stats
+import Link from "next/link";
 
-  // 1. Fetch Realtime Stats
+export default function Dashboard() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalGames: 0,
+    totalXP: 0,
+    accuracy: 0,
+    level: 1,
+    rankTitle: "Rookie",
+    nextLevelXP: 1000
+  });
+
   useEffect(() => {
-    if (!user) return;
+    const fetchData = async () => {
+      if (!user) return;
+      try {
+        // 1. Fetch Realtime Profile (Fast)
+        const profileRef = ref(rtdb, `users/${user.uid}/profile`);
+        const profileSnap = await get(profileRef);
+        
+        let xp = 0;
+        if (profileSnap.exists()) {
+          xp = profileSnap.val().totalXP || 0;
+        }
 
-    const statsRef = ref(db, `users/${user.uid}/stats`);
-    
-    // Listen for changes (Realtime update!)
-    const unsubscribe = onValue(statsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setStats(snapshot.val());
-      } else {
-        // Default stats for new users
-        setStats({
-          totalGames: 0,
-          totalWins: 0,
-          totalXP: 0,
-          totalCoins: 0,
-          winRate: 0,
-          avgAccuracy: 0,
-          currentStreak: 0,
-          bestStreak: 0,
-          rank: "Unranked"
-        });
+        // 2. Fetch History for Stats (Standard)
+        const q = query(
+          collection(db, "gameHistory"),
+          where("userId", "==", user.uid),
+          orderBy("timestamp", "desc"),
+          limit(50)
+        );
+        const snapshot = await getDocs(q);
+        const games = snapshot.docs.map(doc => doc.data());
+
+        // 3. Calc Stats
+        const totalGames = games.length;
+        const totalCorrect = games.reduce((acc, curr) => acc + (curr.correctAnswers || 0), 0);
+        const totalQuestions = games.reduce((acc, curr) => acc + (curr.totalQuestions || 0), 0);
+        const accuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+        const level = Math.floor(xp / 1000) + 1;
+        
+        let rankTitle = "Rookie";
+        if (level >= 5) rankTitle = "Scholar";
+        if (level >= 10) rankTitle = "Elite";
+        if (level >= 20) rankTitle = "Master";
+        if (level >= 50) rankTitle = "Grandmaster";
+
+        setStats({ totalGames, totalXP: xp, accuracy, level, rankTitle, nextLevelXP: level * 1000 });
+      } catch (error) {
+        console.error("Dashboard Load Error:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoadingStats(false);
-    });
-
-    return () => unsubscribe();
+    };
+    fetchData();
   }, [user]);
 
-  // 2. Loading State
-  if (authLoading || (user && loadingStats)) {
-    return <DashboardSkeleton />;
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-violet-600" /></div>;
   }
 
-  // 3. Derived Data (Level Calculation)
-  const xp = stats?.totalXP || 0;
-  const { level, progress, nextLevelXP } = getLevelInfo(xp);
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 p-4 md:p-8 pb-32">
       
-      {/* HEADER: Welcome & Level Progress */}
-      <section className="space-y-4">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-              Welcome back, {user?.displayName?.split(' ')[0]}! 👋
-            </h1>
-            <p className="text-slate-500">Ready to learn something new today?</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border shadow-sm">
-            <span className="font-bold text-violet-600">Level {level}</span>
-            <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-violet-600 transition-all duration-1000" 
-                style={{ width: `${progress}%` }} 
-              />
-            </div>
-            <span className="text-xs text-slate-400">{xp}/{nextLevelXP} XP</span>
-          </div>
+      {/* 1. Live Activity Ticker (FOMO) */}
+      <LiveTicker />
+
+      {/* 2. Hero Section (Motivation) */}
+      <WelcomeBanner 
+        userName={user?.displayName || "Champion"}
+        rankTitle={stats.rankTitle}
+        level={stats.level}
+        xp={stats.totalXP}
+        nextLevelXp={stats.nextLevelXP}
+      />
+
+      {/* 3. Main Game Modes (Premium 3D Cards) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+           <h2 className="text-xl font-bold text-slate-800">Start Playing</h2>
         </div>
-      </section>
+        <ActionGrid />
+      </div>
 
-      {/* STATS GRID */}
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard 
-          label="Total XP" 
-          value={stats?.totalXP.toLocaleString() || "0"} 
-          icon={Icons.trophy} 
-          color="text-yellow-600 bg-yellow-50"
-        />
-        <StatCard 
-          label="Games Played" 
-          value={stats?.totalGames || "0"} 
-          icon={Icons.game} 
-          color="text-blue-600 bg-blue-50"
-        />
-        <StatCard 
-          label="Wins" 
-          value={stats?.totalWins || "0"} 
-          icon={Icons.check} 
-          color="text-emerald-600 bg-emerald-50"
-        />
-        <StatCard 
-          label="Accuracy" 
-          value={`${stats?.avgAccuracy || 0}%`} 
-          icon={Icons.spinner} 
-          color="text-violet-600 bg-violet-50"
-        />
-      </section>
-
-      {/* GAME MODES */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4 text-slate-900">Choose Your Battle</h2>
-        <div className="grid gap-6 md:grid-cols-2">
-          
-          <GameModeCard 
-            title="Solo Practice"
-            description="Master subjects at your own pace. Adaptive AI questions to help you improve weak areas."
-            icon={Icons.user}
-            href="/solo"
-            buttonText="Start Practice"
-            gradient="bg-gradient-to-br from-violet-500 to-fuchsia-500"
-          />
-
-          <GameModeCard 
-            title="Live Multiplayer"
-            description="Compete with up to 1000 students in real-time. Join a room or host your own battle."
-            icon={Icons.users}
-            href="/room/join" // Or create, usually 'join' is the main entry
-            buttonText="Enter Arena"
-            gradient="bg-gradient-to-br from-blue-500 to-cyan-500"
-          />
-          
+      {/* 4. Quick Stats (Reused from Profile for consistency) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+           <h2 className="text-xl font-bold text-slate-800">Your Progress</h2>
+           <Link href="/profile" className="text-sm font-bold text-violet-600 hover:underline">View Full Profile</Link>
         </div>
-      </section>
+        <StatsOverview stats={stats} />
+      </div>
 
-      {/* (Optional) Recent History - Can be added later */}
-    </div>
-  );
-}
-
-// 4. Loading Skeleton (UI Placeholder)
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <Skeleton className="h-10 w-[250px]" />
-        <Skeleton className="h-4 w-[200px]" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-32 rounded-lg" />
-        ))}
-      </div>
-      <div className="grid gap-6 md:grid-cols-2">
-        <Skeleton className="h-64 rounded-lg" />
-        <Skeleton className="h-64 rounded-lg" />
-      </div>
     </div>
   );
 }
