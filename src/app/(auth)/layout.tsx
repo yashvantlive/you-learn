@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Login - YouLearn",
-  description: "Secure student access",
+  title: {
+    template: "%s | YouLearn",
+    default: "Authentication | YouLearn", // Fallback title
+  },
+  description: "Secure student access portal for YouLearn. Login to continue your learning journey.",
+  keywords: ["YouLearn", "Student Login", "Exam Prep", "Auth"],
 };
 
 export default function AuthLayout({
@@ -11,8 +15,9 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
-      {/* यह सिर्फ एक Wrapper है, यहाँ कोई Logic नहीं होगा */}
+    // ✅ FIX: Remove 'flex' & 'min-h-screen' from here because the Page component 
+    // already handles the full-screen layout. This prevents layout conflicts.
+    <div className="w-full h-full bg-slate-50 antialiased">
       {children}
     </div>
   );

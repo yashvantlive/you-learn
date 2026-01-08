@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ✅ Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // 🔴 TODO: Replace with your actual Admin UID or Custom Claim logic
+    // Example: request.auth.token.admin == true;
+    function isAdmin() {
+       return request.auth.token.email == "admin@youlearn.com"; 
+    }
+
+    // --- 1. USERS COLLECTION ---
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // --- 2. QUESTIONS BANK (Critical) ---
+    match /questions/{questionId} {
+      // Students can READ (to play game)
+      allow read: if isAuthenticated();
+      
+      // Only Admin can WRITE (Add/Edit/Delete)
+      // For now, allowing all authenticated users to test, BUT change this to isAdmin() later!
+      allow write: if isAuthenticated(); 
+    }
+
+    // --- 3. GAME HISTORY ---
+    match /gameHistory/{historyId} {
+      // Users can create their own history
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can read ONLY their own history
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // --- 4. MULTIPLAYER ROOMS ---
+    match /rooms/{roomId} {
+      // Anyone logged in can join/create rooms
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -13,26 +13,25 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  /*
-   * 🔒 ENGINEERING NOTE: COOP/COEP WARNING
-   * * If you see "Cross-Origin-Opener-Policy policy would block the window.close call" in console:
-   * * 1. STATUS: EXPECTED BEHAVIOR (Do not fix)
-   * 2. CAUSE:  The Google Auth popup runs on a cross-origin domain. When it completes and 
-   * attempts to self-close via window.close(), modern browser COOP isolation 
-   * flags this interaction because the opener (our app) enforces security policies.
-   * 3. IMPACT: NONE. The auth token is successfully passed before this warning triggers.
-   * The popup closes successfully despite the warning.
-   * 4. ACTION: No action required. Do not relax headers further (e.g., unsafe-none) 
-   * just to silence a harmless console log.
-   */
   const handleGoogleLogin = async () => {
+    if (loading) return;
+    
     setLoading(true);
     setError("");
 
     try {
+      // Force account selection to prevent auto-login issues
+      googleProvider.setCustomParameters({
+        prompt: 'select_account'
+      });
+
       // 1. Google Sign In
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+
+      if (!user) {
+        throw new Error("Authentication failed: No user data");
+      }
 
       // 2. Check Profile Status in Realtime DB
       const profileRef = ref(rtdb, `users/${user.uid}/profile`);
@@ -40,23 +39,34 @@ export default function LoginPage() {
 
       // 3. Intelligent Redirect
       if (snapshot.exists() && snapshot.val().isOnboarded === true) {
-        // If profile exists and onboarded -> Dashboard
         router.push("/dashboard");
       } else {
-        // If new user or incomplete profile -> Onboarding
         router.push("/onboarding");
       }
 
     } catch (err: any) {
       console.error("Login Error:", err);
-      setError("Failed to sign in. Please try again.");
-      setLoading(false); // Stop loading on error
+
+      // Handle specific Firebase Auth errors
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError("Sign-in cancelled.");
+      } else if (err.code === 'auth/popup-blocked') {
+        setError("Popup blocked. Please allow popups for this site.");
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        setError("Another sign-in is in progress.");
+      } else if (err.code === 'auth/network-request-failed') {
+        setError("Network error. Please check your connection.");
+      } else {
+        setError("Failed to sign in. Please try again.");
+      }
+    } finally {
+      // CRITICAL: Always reset loading state
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      
       <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl space-y-8 animate-in slide-in-from-bottom-4 border border-slate-100">
         
         {/* Header */}
@@ -70,15 +80,14 @@ export default function LoginPage() {
 
         {/* Buttons Group */}
         <div className="space-y-3">
-          {/* 1. Google Login Button */}
           <button 
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-violet-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] shadow-sm"
+            className="w-full py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-violet-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? (
               <span className="flex items-center gap-2">
-                <Loader2 className="animate-spin" /> Checking profile...
+                <Loader2 className="animate-spin" /> Signing in...
               </span>
             ) : (
               <>
@@ -88,7 +97,6 @@ export default function LoginPage() {
             )}
           </button>
           
-          {/* 2. ✅ Back to Home Button (Inside Card) */}
           <Link 
             href="/" 
             className="w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl hover:bg-slate-200 hover:text-slate-800 transition-all flex items-center justify-center gap-2"
@@ -97,13 +105,13 @@ export default function LoginPage() {
           </Link>
 
           {error && (
-            <div className="bg-red-50 text-red-500 text-sm font-bold p-3 rounded-xl text-center border border-red-100">
+            <div className="bg-red-50 text-red-500 text-sm font-bold p-3 rounded-xl text-center border border-red-100 animate-in fade-in">
               {error}
             </div>
           )}
         </div>
 
-        {/* Footer & Legal Links */}
+        {/* Footer */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
           <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
             Secure Login Powered by Google

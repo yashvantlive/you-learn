@@ -3,7 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   
-  // ✅ Images Configuration for Google Auth Profile Pictures
   images: {
     remotePatterns: [
       {
@@ -17,7 +16,6 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // ✅ Security Headers (Includes COOP Fix)
   async headers() {
     return [
       {
@@ -43,13 +41,12 @@ const nextConfig: NextConfig = {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
           },
+          // 🔒 CRITICAL FIX: Changing to 'unsafe-none'
+          // 'same-origin-allow-popups' was blocking window.closed access in some browsers/contexts.
+          // 'unsafe-none' allows the main window to poll the popup without restriction.
           {
-            // 🔒 SECURITY CRITICAL: COOP POLICY
-            // 'same-origin-allow-popups' breaks the isolation slightly to allow 
-            // the Google Auth popup to communicate back to the main window.
-            // Using 'same-origin' would break the popup flow entirely.
             key: "Cross-Origin-Opener-Policy",
-            value: "same-origin-allow-popups",
+            value: "unsafe-none", 
           },
         ],
       },
